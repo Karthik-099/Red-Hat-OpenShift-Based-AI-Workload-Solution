@@ -1,0 +1,42 @@
+---
+- name: Rollback AI Inference Platform Deployment
+  hosts: localhost
+  gather_facts: no
+  vars:
+    namespace: ai-workload
+    app_name: ai-inference
+    
+  tasks:
+    - name: Get deployment history
+      command: oc rollout history deployment/{{ app_name }} -n {{ namespace }}
+      register: rollout_history
+      changed_when: false
+      
+    - name: Display rollout history
+      debug:
+        msg: "{{ rollout_history.stdout_lines }}"
+        
+    - name: Rollback to previous version
+      command: oc rollout undo deployment/{{ app_name }} -n {{ namespace }}
+      register: rollback_result
+      
+    - name: Wait for rollback to complete
+      command: oc rollout status deployment/{{ app_name }} -n {{ namespace }}
+      register: rollout_status
+      changed_when: false
+      
+    - name: Display rollback status
+      debug:
+        msg: "Rollback completed successfully"
+        
+    - name: Verify pods are running
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app={{ app_name }}
+      register: pod_info
+      
+    - name: Display pod status
+      debug:
+        msg: "Running pods: {{ pod_info.resources | length }}"

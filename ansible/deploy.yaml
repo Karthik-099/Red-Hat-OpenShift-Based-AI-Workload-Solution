@@ -1,0 +1,66 @@
+---
+- name: Deploy AI Inference Platform on OpenShift
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    namespace: ai-workload
+    app_name: ai-inference
+    image_registry: quay.io/karthik099
+    image_name: ai-inference
+    image_tag: latest
+    
+  tasks:
+    - name: Ensure OpenShift CLI is available
+      command: oc version
+      register: oc_version
+      changed_when: false
+      
+    - name: Display OpenShift version
+      debug:
+        msg: "OpenShift CLI version: {{ oc_version.stdout_lines[0] }}"
+        
+    - name: Create namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ namespace }}"
+            labels:
+              name: "{{ namespace }}"
+              monitoring: enabled
+              
+    - name: Apply deployment manifests
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+        namespace: "{{ namespace }}"
+      loop:
+        - ../k8s/deployment.yaml
+        - ../k8s/service.yaml
+        - ../k8s/hpa.yaml
+        - ../k8s/route.yaml
+        - ../k8s/servicemonitor.yaml
+        
+    - name: Wait for deployment to be ready
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        name: "{{ app_name }}"
+        namespace: "{{ namespace }}"
+      register: deployment_status
+      until: deployment_status.resources[0].status.readyReplicas | default(0) >= 3
+      retries: 30
+      delay: 10
+      
+    - name: Get route URL
+      kubernetes.core.k8s_info:
+        kind: Route
+        name: ai-inference-route
+        namespace: "{{ namespace }}"
+      register: route_info
+      
+    - name: Display application URL
+      debug:
+        msg: "Application is available at: https://{{ route_info.resources[0].spec.host }}"
+      when: route_info.resources | length > 0
