@@ -1,0 +1,40 @@
+replicaCount: 3
+
+image:
+  repository: quay.io/karthik099/ai-inference
+  pullPolicy: Always
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+monitoring:
+  enabled: true
+  interval: 30s
+
+route:
+  enabled: true
+  tls:
+    enabled: true
+    termination: edge
+
+env:
+  logLevel: INFO
+  workers: 4
